@@ -149,10 +149,12 @@
 
     <div class="controls">
         <button id="generate-array-btn">Generate New Array</button>
-        <button id="bubble-sort-btn">Bubble Sort</button>
-        <button id="selection-sort-btn">Selection Sort</button>
-        <button id="insertion-sort-btn">Insertion Sort</button>
-        <button id="quick-sort-btn">Quick Sort</button>
+        <button id="bubble-sort-btn" data-sort="bubbleSort">Bubble Sort</button>
+        <button id="selection-sort-btn" data-sort="selectionSort">Selection Sort</button>
+        <button id="insertion-sort-btn" data-sort="insertionSort">Insertion Sort</button>
+        <button id="quick-sort-btn" data-sort="quickSort">Quick Sort</button>
+        <button id="merge-sort-btn" data-sort="mergeSort">Merge Sort</button>
+        <button id="heap-sort-btn" data-sort="heapSort">Heap Sort</button>
         <div class="speed-control">
             <label for="speed-slider">Speed:</label>
             <input type="range" id="speed-slider" min="1" max="500" value="20">
@@ -170,6 +172,8 @@
             const selectionSortBtn = document.getElementById('selection-sort-btn');
             const insertionSortBtn = document.getElementById('insertion-sort-btn');
             const quickSortBtn = document.getElementById('quick-sort-btn');
+            const mergeSortBtn = document.getElementById('merge-sort-btn');
+            const heapSortBtn = document.getElementById('heap-sort-btn');
             const speedSlider = document.getElementById('speed-slider');
             const speedValueOutput = document.getElementById('speed-value');
 
@@ -178,7 +182,9 @@
                 bubbleSortBtn,
                 selectionSortBtn,
                 insertionSortBtn,
-                quickSortBtn
+                quickSortBtn,
+                mergeSortBtn,
+                heapSortBtn
             ];
 
             let state = {
@@ -407,7 +413,7 @@
 
                     if (arr[j] < pivot) {
                         i++;
-                        [arr[i], arr[j]] = [arr[j], arr[i]];
+                        [arr[j], arr[i]] = [arr[i], arr[j]];
                         await swap(bars, i, j);
                     }
                     bars[j].classList.remove('comparing');
@@ -422,6 +428,84 @@
                 return i + 1;
             }
 
+            async function mergeSort(arr = state.array, low = 0, high = arr.length - 1, bars = Array.from(document.getElementsByClassName('array-bar'))) {
+                if (low < high) {
+                    const mid = Math.floor((low + high) / 2);
+                    await mergeSort(arr, low, mid, bars);
+                    await mergeSort(arr, mid + 1, high, bars);
+                    await merge(arr, low, mid, high, bars);
+                }
+            }
+
+            async function merge(arr, low, mid, high, bars) {
+                const left = arr.slice(low, mid + 1);
+                const right = arr.slice(mid + 1, high + 1);
+                let i = 0;
+                let j = 0;
+                let k = low;
+
+                while (i < left.length && j < right.length) {
+                    bars[k].classList.add('comparing');
+                    await new Promise(resolve => setTimeout(resolve, state.compareDelayMs));
+                    await yieldToBrowser();
+
+                    if (left[i] <= right[j]) {
+                        arr[k] = left[i];
+                        i++;
+                    } else {
+                        arr[k] = right[j];
+                        j++;
+                    }
+                    k++;
+                    bars[k - 1].classList.remove('comparing');
+                }
+
+                while (i < left.length) {
+                    arr[k] = left[i];
+                    i++;
+                    k++;
+                }
+
+                while (j < right.length) {
+                    arr[k] = right[j];
+                    j++;
+                    k++;
+                }
+            }
+
+            async function heapSort() {
+                const n = state.array.length;
+                for (let i = Math.floor(n / 2) - 1; i >= 0; i--) {
+                    await heapify(state.array, n, i, Array.from(document.getElementsByClassName('array-bar')));
+                }
+
+                for (let i = n - 1; i > 0; i--) {
+                    [state.array[0], state.array[i]] = [state.array[i], state.array[0]];
+                    await swap(Array.from(document.getElementsByClassName('array-bar')), 0, i);
+                    await heapify(state.array, i, 0, Array.from(document.getElementsByClassName('array-bar')));
+                }
+            }
+
+            async function heapify(arr, n, i, bars) {
+                let largest = i;
+                const left = 2 * i + 1;
+                const right = 2 * i + 2;
+
+                if (left < n && arr[left] > arr[largest]) {
+                    largest = left;
+                }
+
+                if (right < n && arr[right] > arr[largest]) {
+                    largest = right;
+                }
+
+                if (largest !== i) {
+                    [arr[i], arr[largest]] = [arr[largest], arr[i]];
+                    await swap(bars, i, largest);
+                    await heapify(arr, n, largest, bars);
+                }
+            }
+
             async function runSort(sortFn) {
                 if (state.isSorting || state.array.length === 0) {
                     return; // Prevent multiple sorts or sorting empty array
@@ -432,19 +516,10 @@
                 resetBars();
 
                 try {
-                    // For Quick Sort, pass the array and initial indices
-                    if (sortFn === quickSort) {
-                        await quickSort(state.array, 0, state.array.length - 1);
-                    } else {
-                        await sortFn();
-                    }
+                    await sortFn();
                 } finally {
                     state.isSorting = false;
                     toggleControls(false); // Re-enable controls on completion (Major Improvement 3)
-                    // Ensure all bars are marked sorted at the end of Quick Sort
-                    if (sortFn === quickSort) {
-                        Array.from(document.getElementsByClassName('array-bar')).forEach(bar => bar.classList.add('sorted'));
-                    }
                 }
             }
 
@@ -477,6 +552,14 @@
 
             quickSortBtn.addEventListener('click', () => {
                 runSort(quickSort);
+            });
+
+            mergeSortBtn.addEventListener('click', () => {
+                runSort(mergeSort);
+            });
+
+            heapSortBtn.addEventListener('click', () => {
+                runSort(heapSort);
             });
 
             // Initial array generation
