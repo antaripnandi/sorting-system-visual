@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sorting Visualizer</title>
+    <style>
+        :root {
+            --bar-max-width: 20px;
+            --bar-min-height: 5px; /* Define as CSS variable */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+        }
+
+        .header {
+            margin-bottom: 20px;
+            font-size: 2em;
+            color: #e94560;
+        }
+
+        .controls {
+            margin-bottom: 30px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .controls button {
+            padding: 12px 25px;
+            font-size: 1.1em;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            color: #fff;
+            background-color: #0f3460;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .controls button:hover:not(:disabled) {
+            background-color: #164a85;
+            transform: translateY(-2px);
+        }
+
+        .controls button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .controls button:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background-color: #0f3460;
+            padding: 10px 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .speed-control label {
+            font-size: 1em;
+            white-space: nowrap;
+        }
+
+        .speed-control input[type="range"] {
+            width: 150px;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 8px;
+            background: #e94560;
+            border-radius: 5px;
+            outline: none;
+            transition: opacity .2s;
+        }
+
+        .speed-control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        .speed-control input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        #array-container {
+            display: flex;
+            width: 90%;
+            max-width: 1200px;
+            min-height: 200px;
+            border: 2px solid #533483;
+            background-color: #0e0e1a;
+            padding: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            align-items: flex-end;
+            gap: 2px;
+            margin-bottom: 20px;
+        }
+
+        .array-bar {
+            flex-grow: 1;
+            background-color: #e94560;
+            margin: 0 1px;
+            transition: height 0.1s ease-in-out, background-color 0.2s ease-in-out; /* Smooth color transition */
+            border-radius: 2px 2px 0 0;
+            width: 100%; /* Ensure bars take full width of their flex item */
+            max-width: var(--bar-max-width); /* Use CSS variable */
+        }
+
+        .array-bar.comparing {
+            background-color: #ffcc00; /* Yellow */
+        }
+
+        .array-bar.swapping {
+            background-color: #00ccff; /* Cyan */
+        }
+
+        .array-bar.sorted {
+            background-color: #66bb6a; /* Green */
+        }
+    </style>
+</head>
+<body>
+    <div class="header">Sorting Visualizer</div>
+
+    <div class="controls">
+        <button id="generate-array-btn">Generate New Array</button>
+        <button id="bubble-sort-btn">Bubble Sort</button>
+        <button id="selection-sort-btn">Selection Sort</button>
+        <button id="insertion-sort-btn">Insertion Sort</button>
+        <button id="quick-sort-btn">Quick Sort</button>
+        <div class="speed-control">
+            <label for="speed-slider">Speed:</label>
+            <input type="range" id="speed-slider" min="1" max="500" value="20">
+            <output id="speed-value">20ms</output>
+        </div>
+    </div>
+
+    <div id="array-container"></div>
+
+    <script>
+        (function() { // Encapsulate global state
+            const arrayContainer = document.getElementById('array-container');
+            const generateArrayBtn = document.getElementById('generate-array-btn');
+            const bubbleSortBtn = document.getElementById('bubble-sort-btn');
+            const selectionSortBtn = document.getElementById('selection-sort-btn');
+            const insertionSortBtn = document.getElementById('insertion-sort-btn');
+            const quickSortBtn = document.getElementById('quick-sort-btn');
+            const speedSlider = document.getElementById('speed-slider');
+            const speedValueOutput = document.getElementById('speed-value');
+
+            const allControlButtons = [
+                generateArrayBtn,
+                bubbleSortBtn,
+                selectionSortBtn,
+                insertionSortBtn,
+                quickSortBtn
+            ];
+
+            let state = {
+                array: [],
+                isSorting: false,
+                compareDelayMs: 20, // Faster Default Speed (Major Improvement)
+                swapDelayMs: 40    // Faster Default Speed (Major Improvement)
+            };
+
+            // Get CSS variable for min-height
+            const minBarHeightCss = getComputedStyle(document.documentElement).getPropertyValue('--bar-min-height');
+            const minBarHeight = parseFloat(minBarHeightCss) || 5; // Default to 5px if CSS variable is invalid
+
+            function toggleControls(disabled) {
+                allControlButtons.forEach(button => {
+                    button.disabled = disabled;
+                });
+                speedSlider.disabled = disabled; // Disable speed slider during sort
+            }
+
+            async function yieldToBrowser() {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+
+            function generateRandomArray() {
+                // Clear DOM before rendering new array (Critical Fix 1)
+                arrayContainer.innerHTML = '';
+
+                const numBars = Math.floor(Math.random() * (100 - 10 + 1)) + 10;
+                state.array = [];
+                for (let i = 0; i < numBars; i++) {
+                    state.array.push(Math.floor(Math.random() * 200) + 5); // Numbers between 5 and 204
+                }
+                renderArray();
+            }
+
+            function renderArray() {
+                arrayContainer.innerHTML = '';
+                if (state.array.length === 0) { // Safe Height Calculation (Critical Fix 3)
+                    return; // Don't render if array is empty
+                }
+
+                const maxValue = Math.max(...state.array);
+                // Handle maxValue being 0 or less (e.g., all 0s or negative values)
+                const effectiveMaxValue = maxValue > 0 ? maxValue : 1; 
+
+                state.array.forEach(value => {
+                    const bar = document.createElement('div');
+                    bar.classList.add('array-bar');
+                    bar.setAttribute('role', 'progressbar'); // Add ARIA role (Minor Refactoring 4)
+                    bar.setAttribute('aria-valuenow', value); // Add ARIA value (Minor Refactoring 4)
+
+                    // Scale height based on max value for better visualization
+                    // Use minBarHeightCss from CSS variable (Major Improvement 4 / Critical Fix 3)
+                    bar.style.height = `${(value / effectiveMaxValue) * 100 + minBarHeight}px`; 
+                    arrayContainer.appendChild(bar);
+                });
+            }
+
+            async function swap(bars, index1, index2) {
+                // Use spread operator for static collection (Minor Refactoring 3)
+                const staticBars = Array.from(bars);
+
+                // Animate swap
+                staticBars[index1].classList.add('swapping');
+                staticBars[index2].classList.add('swapping');
+                await new Promise(resolve => setTimeout(resolve, state.swapDelayMs)); // Use separate swap delay
+
+                // Swap heights directly
+                const tempHeight = staticBars[index1].style.height;
+                staticBars[index1].style.height = staticBars[index2].style.height;
+                staticBars[index2].style.height = tempHeight;
+
+                // No need to swap background color here, classes handle it
+
+                staticBars[index1].classList.remove('swapping');
+                staticBars[index2].classList.remove('swapping');
+                await new Promise(resolve => setTimeout(resolve, state.swapDelayMs));
+            }
+
+            function resetBars() {
+                // Use spread operator for static collection (Minor Refactoring 3)
+                const bars = Array.from(document.getElementsByClassName('array-bar'));
+                bars.forEach(bar => {
+                    bar.classList.remove('comparing', 'swapping', 'sorted');
+                });
+            }
+
+            async function bubbleSort() {
+                const bars = Array.from(document.getElementsByClassName('array-bar')); // Static collection
+                const n = state.array.length;
+                for (let i = 0; i < n - 1; i++) {
+                    for (let j = 0; j < n - i - 1; j++) {
+                        bars[j].classList.add('comparing');
+                        bars[j + 1].classList.add('comparing');
+                        await new Promise(resolve => setTimeout(resolve, state.compareDelayMs)); // Use separate compare delay
+                        await yieldToBrowser(); // UI Non-blocking (Critical Fix 2)
+
+                        if (state.array[j] > state.array[j + 1]) {
+                            [state.array[j], state.array[j + 1]] = [state.array[j + 1], state.array[j]];
+                            await swap(bars, j, j + 1);
+                        }
+
+                        bars[j].classList.remove('comparing');
+                        bars[j + 1].classList.remove('comparing');
+                    }
+                    bars[n - 1 - i].classList.add('sorted');
+                }
+                if (n > 0) { // Ensure bars[0] exists before accessing
+                    bars[0].classList.add('sorted'); // Mark the first element as sorted after loop
+                }
+            }
+
+            async function selectionSort() {
+                const bars = Array.from(document.getElementsByClassName('array-bar')); // Static collection
+                const n = state.array.length;
+                for (let i = 0; i < n - 1; i++) {
+                    let minIndex = i;
+                    bars[i].classList.add('comparing');
+                    let previousMinBar = null; // Track previously marked min
+
+                    for (let j = i + 1; j < n; j++) {
+                        bars[j].classList.add('comparing');
+                        await new Promise(resolve => setTimeout(resolve, state.compareDelayMs)); // Use separate compare delay
+                        await yieldToBrowser(); // UI Non-blocking (Critical Fix 2)
+
+                        if (state.array[j] < state.array[minIndex]) {
+                            // Remove 'swapping' from old minIndex if it wasn't i
+                            if (previousMinBar && previousMinBar !== bars[i]) {
+                                previousMinBar.classList.remove('swapping');
+                            }
+                            minIndex = j;
+                            bars[minIndex].classList.add('swapping'); // Mark current minimum
+                            previousMinBar = bars[minIndex];
+                        } else {
+                            bars[j].classList.remove('comparing');
+                        }
+                    }
+
+                    // Correct Selection Sort Min-Index Handling (Major Improvement 2)
+                    if (previousMinBar) {
+                        previousMinBar.classList.remove('swapping');
+                    }
+
+                    if (minIndex !== i) {
+                        [state.array[i], state.array[minIndex]] = [state.array[minIndex], state.array[i]];
+                        await swap(bars, i, minIndex);
+                    }
+
+                    // Clean up comparing/swapping classes for this iteration
+                    for (let k = i + 1; k < n; k++) {
+                        bars[k].classList.remove('comparing', 'swapping');
+                    }
+
+                    bars[i].classList.remove('comparing');
+                    bars[i].classList.add('sorted');
+                }
+
+                if (n > 0) {
+                    bars[n - 1].classList.add('sorted'); // Mark the last element as sorted
+                }
+            }
+
+            async function insertionSort() {
+                const bars = Array.from(document.getElementsByClassName('array-bar'));
+                const n = state.array.length;
+                for (let i = 1; i < n; i++) {
+                    let current = state.array[i];
+                    let j = i - 1;
+
+                    bars[i].classList.add('comparing');
+                    await new Promise(resolve => setTimeout(resolve, state.compareDelayMs));
+                    await yieldToBrowser();
+
+                    while (j >= 0 && state.array[j] > current) {
+                        bars[j].classList.add('swapping');
+                        bars[j + 1].classList.add('swapping');
+                        await new Promise(resolve => setTimeout(resolve, state.swapDelayMs));
+                        await yieldToBrowser();
+
+                        state.array[j + 1] = state.array[j];
+                        // Visually move bar
+                        bars[j + 1].style.height = bars[j].style.height;
+                        bars[j + 1].setAttribute('aria-valuenow', bars[j].getAttribute('aria-valuenow'));
+
+                        bars[j].classList.remove('swapping');
+                        bars[j + 1].classList.remove('swapping');
+                        j--;
+                    }
+                    state.array[j + 1] = current;
+                    // Update height of inserted bar
+                    const maxValue = Math.max(...state.array);
+                    const effectiveMaxValue = maxValue > 0 ? maxValue : 1;
+                    bars[j + 1].style.height = `${(current / effectiveMaxValue) * 100 + minBarHeight}px`;
+                    bars[j + 1].setAttribute('aria-valuenow', current);
+
+                    bars[i].classList.remove('comparing');
+                }
+                bars.forEach(bar => bar.classList.add('sorted')); // Mark all as sorted at the end
+            }
+
+            async function quickSort(arr = state.array, low = 0, high = arr.length - 1, bars = Array.from(document.getElementsByClassName('array-bar'))) {
+                if (low < high) {
+                    let pi = await partition(arr, low, high, bars);
+                    await quickSort(arr, low, pi - 1, bars);
+                    await quickSort(arr, pi + 1, high, bars);
+                }
+                if (low >= high) { // Mark as sorted if a single element or done partitioning
+                    if (bars[low]) {
+                        bars[low].classList.add('sorted');
+                    }
+                }
+            }
+
+            async function partition(arr, low, high, bars) {
+                let pivot = arr[high];
+                bars[high].classList.add('comparing'); // Highlight pivot
+                await new Promise(resolve => setTimeout(resolve, state.compareDelayMs));
+                await yieldToBrowser();
+
+                let i = (low - 1);
+                for (let j = low; j <= high - 1; j++) {
+                    bars[j].classList.add('comparing');
+                    await new Promise(resolve => setTimeout(resolve, state.compareDelayMs));
+                    await yieldToBrowser();
+
+                    if (arr[j] < pivot) {
+                        i++;
+                        [arr[i], arr[j]] = [arr[j], arr[i]];
+                        await swap(bars, i, j);
+                    }
+                    bars[j].classList.remove('comparing');
+                }
+
+                [arr[i + 1], arr[high]] = [arr[high], arr[i + 1]];
+                await swap(bars, i + 1, high);
+
+                bars[high].classList.remove('comparing'); // Remove pivot highlight
+                bars[i + 1].classList.add('sorted'); // Mark pivot position as sorted
+
+                return i + 1;
+            }
+
+            async function runSort(sortFn) {
+                if (state.isSorting || state.array.length === 0) {
+                    return; // Prevent multiple sorts or sorting empty array
+                }
+
+                state.isSorting = true;
+                toggleControls(true); // Disable controls at start (Major Improvement 3)
+                resetBars();
+
+                try {
+                    // For Quick Sort, pass the array and initial indices
+                    if (sortFn === quickSort) {
+                        await quickSort(state.array, 0, state.array.length - 1);
+                    } else {
+                        await sortFn();
+                    }
+                } finally {
+                    state.isSorting = false;
+                    toggleControls(false); // Re-enable controls on completion (Major Improvement 3)
+                    // Ensure all bars are marked sorted at the end of Quick Sort
+                    if (sortFn === quickSort) {
+                        Array.from(document.getElementsByClassName('array-bar')).forEach(bar => bar.classList.add('sorted'));
+                    }
+                }
+            }
+
+            speedSlider.addEventListener('input', (event) => {
+                const speed = parseInt(event.target.value);
+                state.compareDelayMs = speed; // Slider controls compare delay
+                state.swapDelayMs = speed * 2; // Swap delay is double compare delay
+                speedValueOutput.textContent = `${speed}ms`;
+            });
+
+            generateArrayBtn.addEventListener('click', () => {
+                if (state.isSorting) {
+                    return; // Prevent generating new array while sorting
+                }
+                resetBars();
+                generateRandomArray();
+            });
+
+            bubbleSortBtn.addEventListener('click', () => {
+                runSort(bubbleSort);
+            });
+
+            selectionSortBtn.addEventListener('click', () => {
+                runSort(selectionSort);
+            });
+
+            insertionSortBtn.addEventListener('click', () => {
+                runSort(insertionSort);
+            });
+
+            quickSortBtn.addEventListener('click', () => {
+                runSort(quickSort);
+            });
+
+            // Initial array generation
+            generateRandomArray();
+        })();
+    </script>
+</body>
+</html>
